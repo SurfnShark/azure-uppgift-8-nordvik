@@ -1,0 +1,19 @@
+{
+  "title": "Nordvik Felanm\u00e4lningar",
+  "TicketId": {
+    "type": "Text",
+    "required": true,
+    "unique": true,
+    "maxLength": 32
+  },
+  "fields": {
+    "PropertyId": "Text",
+    "Category": "Text",
+    "DescriptionText": "Note",
+    "ManagerEmail": "Text",
+    "ImagePath": "Text",
+    "TicketStatus": "Text",
+    "NoticeSent": "Boolean",
+    "UrgentSent": "Boolean"
+  }
+}

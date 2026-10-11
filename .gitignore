@@ -1,0 +1,6 @@
+*.pdf
+*.local.json
+.env
+__pycache__/
+.python_packages/
+*.zip

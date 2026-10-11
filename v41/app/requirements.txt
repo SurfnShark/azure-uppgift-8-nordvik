@@ -1,0 +1,6 @@
+azure-functions>=1.21,<2
+azure-identity>=1.19,<2
+azure-storage-blob>=12.24,<13
+azure-storage-queue>=12.12,<13
+Pillow>=11.1,<13
+pypdf>=5,<7

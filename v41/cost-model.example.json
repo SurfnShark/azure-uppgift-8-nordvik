@@ -1,0 +1,46 @@
+{
+  "purpose": "Planering, inte en uppmätt faktura eller prisgaranti",
+  "currency": "SEK",
+  "vatIncluded": false,
+  "scope": "Azureportal. Microsoft 365 och Power Automate licenser redovisas separat.",
+  "targetMonthly": 2500,
+  "assumptions": {
+    "weekdayLogins": 1800,
+    "workdaysMonthly": 22,
+    "functionRequestsPerLogin": 6,
+    "faultReportsMonthly": 2100,
+    "instanceMemoryGB": 2,
+    "privateEndpoints": 2,
+    "hoursMonthly": 730,
+    "storageGBPlanning": 170,
+    "imageGrowthGBYear": [51, 128],
+    "contractStorageGB": 40
+  },
+  "retailReferenceRates": {
+    "privateEndpointPerHour": 0.0997,
+    "hotLRSStoragePerGBMonth": 0.1834,
+    "flexOnDemandPerGBSecondRounded": 0.0003
+  },
+  "monthlyReservations": {
+    "privateEndpoints": 146,
+    "storage": 32,
+    "functions": 1300,
+    "storageTransactionsAndDNS": 100,
+    "traffic": 200,
+    "monitoring": 200,
+    "remainingMargin": 522
+  },
+  "warnings": [
+    "Mät verkliga GB sekunder, antal körningar och trafik före produktionsbeslut.",
+    "Fria Functionmängder delas med andra appar i prenumerationen.",
+    "Privata anslutningar har en kostnad även utan besökare.",
+    "Application Insights och ett fellarm ingår i labben. Reserven är en plan, inte en uppmätt månadskostnad.",
+    "LRS är valet i labben. ZRS, flera zoner eller reservregion kräver en ny kostnadsbedömning.",
+    "Budgetvarningar är inget hårt utgiftstak."
+  ],
+  "sources": [
+    "https://learn.microsoft.com/en-us/rest/api/cost-management/retail-prices/azure-retail-prices",
+    "https://learn.microsoft.com/azure/azure-functions/pricing",
+    "https://azure.microsoft.com/en-us/pricing/details/private-link/"
+  ]
+}

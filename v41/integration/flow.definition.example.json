@@ -1,0 +1,462 @@
+{
+  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "$authentication": {
+      "type": "SecureObject",
+      "defaultValue": {}
+    },
+    "$connections": {
+      "type": "Object",
+      "defaultValue": {}
+    }
+  },
+  "triggers": {
+    "manual": {
+      "type": "Request",
+      "kind": "Http",
+      "inputs": {
+        "schema": {
+          "type": "object",
+          "required": [
+            "id",
+            "title",
+            "description",
+            "propertyId",
+            "category",
+            "urgent",
+            "imagePath",
+            "managerEmail"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 32,
+              "maxLength": 32
+            },
+            "title": {
+              "type": "string",
+              "maxLength": 150
+            },
+            "description": {
+              "type": "string",
+              "maxLength": 4000
+            },
+            "propertyId": {
+              "type": "string",
+              "enum": [
+                "F001",
+                "F002"
+              ]
+            },
+            "category": {
+              "type": "string",
+              "enum": [
+                "varme",
+                "vatten",
+                "las",
+                "ovrigt"
+              ]
+            },
+            "urgent": {
+              "type": "boolean"
+            },
+            "notify": {
+              "type": "boolean"
+            },
+            "imagePath": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "managerEmail": {
+              "type": "string",
+              "enum": [
+                "manager@example.test",
+                "manager2@example.test"
+              ]
+            }
+          }
+        },
+        "triggerAuthenticationType": "All"
+      }
+    }
+  },
+  "actions": {
+    "Get_fields": {
+      "type": "OpenApiConnection",
+      "runAfter": {},
+      "inputs": {
+        "parameters": {
+          "dataset": "https://YOUR_TENANT.sharepoint.com",
+          "parameters/method": "GET",
+          "parameters/uri": "_api/web/lists/getbytitle('Nordvik Felanmälningar')/fields?$select=InternalName",
+          "parameters/headers": {
+            "Accept": "application/json;odata=nometadata"
+          }
+        },
+        "host": {
+          "apiId": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline",
+          "connectionName": "shared_sharepointonline",
+          "operationId": "HttpRequest"
+        },
+        "authentication": "@parameters('$authentication')"
+      }
+    },
+    "Ensure_fields": {
+      "type": "Foreach",
+      "foreach": [
+        {
+          "name": "PropertyId",
+          "xml": "<Field Type=\"Text\" Name=\"PropertyId\" DisplayName=\"PropertyId\" />"
+        },
+        {
+          "name": "Category",
+          "xml": "<Field Type=\"Text\" Name=\"Category\" DisplayName=\"Category\" />"
+        },
+        {
+          "name": "DescriptionText",
+          "xml": "<Field Type=\"Note\" Name=\"DescriptionText\" DisplayName=\"DescriptionText\" />"
+        },
+        {
+          "name": "ManagerEmail",
+          "xml": "<Field Type=\"Text\" Name=\"ManagerEmail\" DisplayName=\"ManagerEmail\" />"
+        },
+        {
+          "name": "ImagePath",
+          "xml": "<Field Type=\"Text\" Name=\"ImagePath\" DisplayName=\"ImagePath\" />"
+        },
+        {
+          "name": "TicketStatus",
+          "xml": "<Field Type=\"Text\" Name=\"TicketStatus\" DisplayName=\"TicketStatus\" />"
+        },
+        {
+          "name": "NoticeSent",
+          "xml": "<Field Type=\"Boolean\" Name=\"NoticeSent\" DisplayName=\"NoticeSent\" />"
+        },
+        {
+          "name": "UrgentSent",
+          "xml": "<Field Type=\"Boolean\" Name=\"UrgentSent\" DisplayName=\"UrgentSent\" />"
+        }
+      ],
+      "runAfter": {
+        "Get_fields": [
+          "Succeeded"
+        ]
+      },
+      "runtimeConfiguration": {
+        "concurrency": {
+          "repetitions": 1
+        }
+      },
+      "actions": {
+        "Field_missing": {
+          "type": "If",
+          "expression": {
+            "equals": [
+              "@contains(string(body('Get_fields')), concat('\"InternalName\":\"', items('Ensure_fields')?['name'], '\"'))",
+              false
+            ]
+          },
+          "actions": {
+            "Create_field": {
+              "type": "OpenApiConnection",
+              "runAfter": {},
+              "inputs": {
+                "parameters": {
+                  "dataset": "https://YOUR_TENANT.sharepoint.com",
+                  "parameters/method": "POST",
+                  "parameters/uri": "_api/web/lists/getbytitle('Nordvik Felanmälningar')/fields/createfieldasxml",
+                  "parameters/headers": {
+                    "Accept": "application/json;odata=nometadata",
+                    "Content-Type": "application/json;odata=nometadata"
+                  },
+                  "parameters/body": "@string(addProperty(json('{}'),'parameters',addProperty(addProperty(json('{}'),'SchemaXml',items('Ensure_fields')?['xml']),'Options',16)))"
+                },
+                "host": {
+                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline",
+                  "connectionName": "shared_sharepointonline",
+                  "operationId": "HttpRequest"
+                },
+                "authentication": "@parameters('$authentication')"
+              }
+            }
+          },
+          "else": {
+            "actions": {}
+          },
+          "runAfter": {}
+        }
+      }
+    },
+    "Get_existing": {
+      "type": "OpenApiConnection",
+      "runAfter": {
+        "Ensure_fields": [
+          "Succeeded"
+        ]
+      },
+      "inputs": {
+        "parameters": {
+          "dataset": "https://YOUR_TENANT.sharepoint.com",
+          "parameters/method": "GET",
+          "parameters/uri": "_api/web/lists/getbytitle('Nordvik Felanmälningar')/items?$filter=TicketId eq '@{triggerBody()?['id']}'&$top=1",
+          "parameters/headers": {
+            "Accept": "application/json;odata=nometadata"
+          }
+        },
+        "host": {
+          "apiId": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline",
+          "connectionName": "shared_sharepointonline",
+          "operationId": "HttpRequest"
+        },
+        "authentication": "@parameters('$authentication')"
+      }
+    },
+    "Create_if_missing": {
+      "type": "If",
+      "expression": {
+        "equals": [
+          "@length(body('Get_existing')?['value'])",
+          0
+        ]
+      },
+      "actions": {
+        "Create_body": {
+          "type": "Compose",
+          "inputs": {
+            "Title": "@triggerBody()?['title']",
+            "TicketId": "@triggerBody()?['id']",
+            "PropertyId": "@triggerBody()?['propertyId']",
+            "Category": "@triggerBody()?['category']",
+            "DescriptionText": "@triggerBody()?['description']",
+            "ManagerEmail": "@triggerBody()?['managerEmail']",
+            "ImagePath": "@triggerBody()?['imagePath']",
+            "TicketStatus": "Ny",
+            "NoticeSent": false,
+            "UrgentSent": false
+          },
+          "runAfter": {}
+        },
+        "Create_record": {
+          "type": "OpenApiConnection",
+          "runAfter": {
+            "Create_body": [
+              "Succeeded"
+            ]
+          },
+          "inputs": {
+            "parameters": {
+              "dataset": "https://YOUR_TENANT.sharepoint.com",
+              "parameters/method": "POST",
+              "parameters/uri": "_api/web/lists/getbytitle('Nordvik Felanmälningar')/items",
+              "parameters/headers": {
+                "Accept": "application/json;odata=nometadata",
+                "Content-Type": "application/json;odata=nometadata"
+              },
+              "parameters/body": "@string(outputs('Create_body'))"
+            },
+            "host": {
+              "apiId": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline",
+              "connectionName": "shared_sharepointonline",
+              "operationId": "HttpRequest"
+            },
+            "authentication": "@parameters('$authentication')"
+          }
+        }
+      },
+      "else": {
+        "actions": {}
+      },
+      "runAfter": {
+        "Get_existing": [
+          "Succeeded"
+        ]
+      }
+    },
+    "Read_current": {
+      "type": "OpenApiConnection",
+      "runAfter": {
+        "Create_if_missing": [
+          "Succeeded"
+        ]
+      },
+      "inputs": {
+        "parameters": {
+          "dataset": "https://YOUR_TENANT.sharepoint.com",
+          "parameters/method": "GET",
+          "parameters/uri": "_api/web/lists/getbytitle('Nordvik Felanmälningar')/items?$filter=TicketId eq '@{triggerBody()?['id']}'&$top=1",
+          "parameters/headers": {
+            "Accept": "application/json;odata=nometadata"
+          }
+        },
+        "host": {
+          "apiId": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline",
+          "connectionName": "shared_sharepointonline",
+          "operationId": "HttpRequest"
+        },
+        "authentication": "@parameters('$authentication')"
+      }
+    },
+    "Send_notice_if_needed": {
+      "type": "If",
+      "expression": {
+        "equals": [
+          "@and(not(equals(triggerBody()?['notify'], false)), equals(first(body('Read_current')?['value'])?['NoticeSent'], false))",
+          true
+        ]
+      },
+      "actions": {
+        "Send_notice": {
+          "type": "OpenApiConnection",
+          "runAfter": {},
+          "inputs": {
+            "parameters": {
+              "emailMessage/To": "@if(equals(triggerBody()?['propertyId'], 'F001'), 'manager@example.test', 'manager2@example.test')",
+              "emailMessage/Subject": "Nordvik felanmälan @{triggerBody()?['id']}",
+              "emailMessage/Body": "<p>Ett nytt Nordvikärende finns i det privata registret.</p><p>Ärendenummer: @{triggerBody()?['id']}</p><p>Fastighet: @{triggerBody()?['propertyId']}</p><p>Öppna Nordviks portal eller registret för detaljer. Bilderna ligger kvar i privat Azurelagring.</p>",
+              "emailMessage/Importance": "Normal"
+            },
+            "host": {
+              "apiId": "/providers/Microsoft.PowerApps/apis/shared_office365",
+              "connectionName": "shared_office365",
+              "operationId": "SendEmailV2"
+            },
+            "authentication": "@parameters('$authentication')"
+          }
+        },
+        "Confirm_notice": {
+          "type": "OpenApiConnection",
+          "runAfter": {
+            "Send_notice": [
+              "Succeeded"
+            ]
+          },
+          "inputs": {
+            "parameters": {
+              "dataset": "https://YOUR_TENANT.sharepoint.com",
+              "parameters/method": "POST",
+              "parameters/uri": "@concat('_api/web/lists/getbytitle(''Nordvik Felanmälningar'')/items(', string(first(body('Read_current')?['value'])?['Id']), ')')",
+              "parameters/headers": {
+                "Accept": "application/json;odata=nometadata",
+                "IF-MATCH": "*",
+                "X-HTTP-Method": "MERGE",
+                "Content-Type": "application/json;odata=nometadata"
+              },
+              "parameters/body": "{\"NoticeSent\": true}"
+            },
+            "host": {
+              "apiId": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline",
+              "connectionName": "shared_sharepointonline",
+              "operationId": "HttpRequest"
+            },
+            "authentication": "@parameters('$authentication')"
+          }
+        }
+      },
+      "else": {
+        "actions": {}
+      },
+      "runAfter": {
+        "Read_current": [
+          "Succeeded"
+        ]
+      }
+    },
+    "Send_urgent_if_needed": {
+      "type": "If",
+      "expression": {
+        "and": [
+          {
+            "equals": [
+              "@and(equals(triggerBody()?['urgent'], true), not(equals(triggerBody()?['notify'], false)))",
+              true
+            ]
+          },
+          {
+            "equals": [
+              "@first(body('Read_current')?['value'])?['UrgentSent']",
+              false
+            ]
+          }
+        ]
+      },
+      "actions": {
+        "Send_urgent": {
+          "type": "OpenApiConnection",
+          "runAfter": {},
+          "inputs": {
+            "parameters": {
+              "emailMessage/To": "@if(equals(triggerBody()?['propertyId'], 'F001'), 'manager@example.test', 'manager2@example.test')",
+              "emailMessage/Subject": "AKUT Nordvik felanmälan @{triggerBody()?['id']}",
+              "emailMessage/Body": "<p>Ett nytt Nordvikärende finns i det privata registret.</p><p>Ärendenummer: @{triggerBody()?['id']}</p><p>Fastighet: @{triggerBody()?['propertyId']}</p><p>Öppna Nordviks portal eller registret för detaljer. Bilderna ligger kvar i privat Azurelagring.</p>",
+              "emailMessage/Importance": "High"
+            },
+            "host": {
+              "apiId": "/providers/Microsoft.PowerApps/apis/shared_office365",
+              "connectionName": "shared_office365",
+              "operationId": "SendEmailV2"
+            },
+            "authentication": "@parameters('$authentication')"
+          }
+        },
+        "Confirm_urgent": {
+          "type": "OpenApiConnection",
+          "runAfter": {
+            "Send_urgent": [
+              "Succeeded"
+            ]
+          },
+          "inputs": {
+            "parameters": {
+              "dataset": "https://YOUR_TENANT.sharepoint.com",
+              "parameters/method": "POST",
+              "parameters/uri": "@concat('_api/web/lists/getbytitle(''Nordvik Felanmälningar'')/items(', string(first(body('Read_current')?['value'])?['Id']), ')')",
+              "parameters/headers": {
+                "Accept": "application/json;odata=nometadata",
+                "IF-MATCH": "*",
+                "X-HTTP-Method": "MERGE",
+                "Content-Type": "application/json;odata=nometadata"
+              },
+              "parameters/body": "{\"UrgentSent\": true}"
+            },
+            "host": {
+              "apiId": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline",
+              "connectionName": "shared_sharepointonline",
+              "operationId": "HttpRequest"
+            },
+            "authentication": "@parameters('$authentication')"
+          }
+        }
+      },
+      "else": {
+        "actions": {}
+      },
+      "runAfter": {
+        "Send_notice_if_needed": [
+          "Succeeded"
+        ]
+      }
+    },
+    "Complete": {
+      "type": "Response",
+      "kind": "Http",
+      "runAfter": {
+        "Send_urgent_if_needed": [
+          "Succeeded"
+        ]
+      },
+      "inputs": {
+        "statusCode": 200,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "id": "@triggerBody()?['id']",
+          "completed": true
+        }
+      }
+    }
+  },
+  "outputs": {}
+}

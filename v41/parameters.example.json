@@ -1,0 +1,57 @@
+{
+  "parameters": {
+    "location": {
+      "value": "swedencentral"
+    },
+    "functionName": {
+      "value": "fn-nordvik-portal-YOUR_SUFFIX"
+    },
+    "hostStorageName": {
+      "value": "stnordvikyouruser01"
+    },
+    "ticketStorageName": {
+      "value": "stnordvikyouruser02"
+    },
+    "tenantId": {
+      "value": "YOUR_TENANT_ID"
+    },
+    "authClientId": {
+      "value": "YOUR_APP_ID"
+    },
+    "authClientSecret": {
+      "value": "USE_PRIVATE_FILE"
+    },
+    "flowUrl": {
+      "value": "USE_PRIVATE_FILE"
+    },
+    "assignments": {
+      "value": {
+        "TENANT_OBJECT_ID": {
+          "properties": [
+            "F001"
+          ]
+        },
+        "MANAGER_OBJECT_ID": {
+          "properties": [
+            "F001"
+          ]
+        }
+      }
+    },
+    "managers": {
+      "value": {
+        "F001": "manager@example.test",
+        "F002": "manager2@example.test"
+      }
+    },
+    "maximumInstances": {
+      "value": 10
+    },
+    "notificationEmail": {
+      "value": "manager@example.test"
+    },
+    "budgetStartDate": {
+      "value": "YYYY-MM-01T00:00:00Z"
+    }
+  }
+}

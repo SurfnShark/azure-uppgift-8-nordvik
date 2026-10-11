@@ -1,0 +1,809 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "swedencentral"
+    },
+    "functionName": {
+      "type": "string"
+    },
+    "hostStorageName": {
+      "type": "string"
+    },
+    "ticketStorageName": {
+      "type": "string"
+    },
+    "tenantId": {
+      "type": "string"
+    },
+    "authClientId": {
+      "type": "string"
+    },
+    "authClientSecret": {
+      "type": "secureString"
+    },
+    "flowUrl": {
+      "type": "secureString"
+    },
+    "assignments": {
+      "type": "object"
+    },
+    "managers": {
+      "type": "object"
+    },
+    "maximumInstances": {
+      "type": "int",
+      "defaultValue": 2,
+      "minValue": 2,
+      "maxValue": 10
+    },
+    "tags": {
+      "type": "object",
+      "defaultValue": {
+        "company": "nordvik",
+        "department": "forvaltning",
+        "property": "shared",
+        "environment": "lab",
+        "lab": "nordvik-v41"
+      }
+    },
+    "notificationEmail": {
+      "type": "string",
+      "defaultValue": "manager@example.test"
+    },
+    "budgetStartDate": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+      "apiVersion": "2023-01-31",
+      "name": "[variables('identityName')]",
+      "properties": {},
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]"
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2023-05-01",
+      "name": "[parameters('hostStorageName')]",
+      "properties": {
+        "minimumTlsVersion": "TLS1_2",
+        "supportsHttpsTrafficOnly": true,
+        "allowBlobPublicAccess": false,
+        "allowSharedKeyAccess": false,
+        "publicNetworkAccess": "Enabled",
+        "networkAcls": {
+          "defaultAction": "Allow",
+          "bypass": "None"
+        }
+      },
+      "location": "[parameters('location')]",
+      "kind": "StorageV2",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "tags": "[parameters('tags')]"
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "apiVersion": "2023-05-01",
+      "name": "[concat(parameters('hostStorageName'),'/default/deployment')]",
+      "properties": {
+        "publicAccess": "None"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts',parameters('hostStorageName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2023-05-01",
+      "name": "[parameters('ticketStorageName')]",
+      "properties": {
+        "minimumTlsVersion": "TLS1_2",
+        "supportsHttpsTrafficOnly": true,
+        "allowBlobPublicAccess": false,
+        "allowSharedKeyAccess": false,
+        "publicNetworkAccess": "Disabled",
+        "networkAcls": {
+          "defaultAction": "Deny",
+          "bypass": "None"
+        }
+      },
+      "location": "[parameters('location')]",
+      "kind": "StorageV2",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "tags": "[parameters('tags')]"
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "apiVersion": "2023-05-01",
+      "name": "[concat(parameters('ticketStorageName'),'/default/felanmalningar')]",
+      "properties": {
+        "publicAccess": "None"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts',parameters('ticketStorageName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(resourceGroup().id,parameters('hostStorageName'),'b7e6dc6d-f1e8-4753-8033-0f276bb0955b','mi')]",
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions','b7e6dc6d-f1e8-4753-8033-0f276bb0955b')]",
+        "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities',variables('identityName')),'2023-01-31').principalId]",
+        "principalType": "ServicePrincipal"
+      },
+      "scope": "[concat('Microsoft.Storage/storageAccounts/',parameters('hostStorageName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts',parameters('hostStorageName'))]",
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities',variables('identityName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(resourceGroup().id,parameters('ticketStorageName'),'ba92f5b4-2d11-453d-a403-e96b0029c9fe','mi')]",
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions','ba92f5b4-2d11-453d-a403-e96b0029c9fe')]",
+        "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities',variables('identityName')),'2023-01-31').principalId]",
+        "principalType": "ServicePrincipal"
+      },
+      "scope": "[concat('Microsoft.Storage/storageAccounts/',parameters('ticketStorageName'),'/blobServices/default/containers/felanmalningar')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts',parameters('ticketStorageName'))]",
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities',variables('identityName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers',parameters('ticketStorageName'),'default','felanmalningar')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2024-04-01",
+      "name": "[variables('planName')]",
+      "properties": {
+        "reserved": true
+      },
+      "location": "[parameters('location')]",
+      "kind": "functionapp",
+      "sku": {
+        "name": "FC1",
+        "tier": "FlexConsumption"
+      },
+      "tags": "[parameters('tags')]"
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2024-04-01",
+      "name": "[parameters('functionName')]",
+      "properties": {
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms',variables('planName'))]",
+        "httpsOnly": true,
+        "publicNetworkAccess": "Enabled",
+        "functionAppConfig": {
+          "runtime": {
+            "name": "python",
+            "version": "3.11"
+          },
+          "deployment": {
+            "storage": {
+              "type": "blobContainer",
+              "value": "[concat('https://',parameters('hostStorageName'),'.blob.core.windows.net/deployment')]",
+              "authentication": {
+                "type": "UserAssignedIdentity",
+                "userAssignedIdentityResourceId": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities',variables('identityName'))]"
+              }
+            }
+          },
+          "scaleAndConcurrency": {
+            "instanceMemoryMB": 2048,
+            "maximumInstanceCount": "[parameters('maximumInstances')]",
+            "triggers": {
+              "http": {
+                "perInstanceConcurrency": 8
+              }
+            }
+          }
+        },
+        "siteConfig": {
+          "appSettings": [
+            {
+              "name": "AzureWebJobsStorage__accountName",
+              "value": "[parameters('hostStorageName')]"
+            },
+            {
+              "name": "AzureWebJobsStorage__credential",
+              "value": "managedidentity"
+            },
+            {
+              "name": "AzureWebJobsStorage__clientId",
+              "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities',variables('identityName')),'2023-01-31').clientId]"
+            },
+            {
+              "name": "NORDVIK_TENANT_ID",
+              "value": "[parameters('tenantId')]"
+            },
+            {
+              "name": "NORDVIK_AUTH_SECRET",
+              "value": "[parameters('authClientSecret')]"
+            },
+            {
+              "name": "NORDVIK_ASSIGNMENTS",
+              "value": "[string(parameters('assignments'))]"
+            },
+            {
+              "name": "NORDVIK_MANAGERS",
+              "value": "[string(parameters('managers'))]"
+            },
+            {
+              "name": "NORDVIK_FLOW_URL",
+              "value": "[parameters('flowUrl')]"
+            },
+            {
+              "name": "NORDVIK_BLOB_URL",
+              "value": "[concat('https://',parameters('ticketStorageName'),'.blob.core.windows.net')]"
+            },
+            {
+              "name": "NORDVIK_QUEUE_URL",
+              "value": "[concat('https://',parameters('ticketStorageName'),'.queue.core.windows.net')]"
+            },
+            {
+              "name": "NORDVIK_IDENTITY_CLIENT_ID",
+              "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities',variables('identityName')),'2023-01-31').clientId]"
+            },
+            {
+              "name": "NordvikQueue__queueServiceUri",
+              "value": "[concat('https://',parameters('ticketStorageName'),'.queue.core.windows.net')]"
+            },
+            {
+              "name": "NordvikQueue__credential",
+              "value": "managedidentity"
+            },
+            {
+              "name": "NordvikQueue__clientId",
+              "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities',variables('identityName')),'2023-01-31').clientId]"
+            },
+            {
+              "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+              "value": "[reference(resourceId('Microsoft.Insights/components','appi-nordvik-portal'),'2020-02-02').ConnectionString]"
+            },
+            {
+              "name": "NORDVIK_NOTIFICATION_MODE",
+              "value": "normal"
+            }
+          ],
+          "minTlsVersion": "1.2",
+          "scmMinTlsVersion": "1.2",
+          "ftpsState": "Disabled"
+        },
+        "virtualNetworkSubnetId": "[resourceId('Microsoft.Network/virtualNetworks/subnets','vnet-nordvik','snet-functions')]"
+      },
+      "location": "[parameters('location')]",
+      "kind": "functionapp,linux",
+      "identity": {
+        "type": "UserAssigned",
+        "userAssignedIdentities": {
+          "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities',variables('identityName'))]": {}
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities',variables('identityName'))]",
+        "[resourceId('Microsoft.Web/serverfarms',variables('planName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts',parameters('hostStorageName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts',parameters('ticketStorageName'))]",
+        "[resourceId('Microsoft.Network/virtualNetworks','vnet-nordvik')]",
+        "[resourceId('Microsoft.Insights/components','appi-nordvik-portal')]"
+      ],
+      "tags": "[parameters('tags')]"
+    },
+    {
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "2023-11-01",
+      "name": "nsg-nordvik-portal",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "properties": {
+        "securityRules": [
+          {
+            "name": "allow-vnet",
+            "properties": {
+              "priority": 100,
+              "access": "Allow",
+              "direction": "Inbound",
+              "protocol": "*",
+              "sourceAddressPrefix": "VirtualNetwork",
+              "destinationAddressPrefix": "VirtualNetwork",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*"
+            }
+          },
+          {
+            "name": "deny-other-inbound",
+            "properties": {
+              "priority": 200,
+              "access": "Deny",
+              "direction": "Inbound",
+              "protocol": "*",
+              "sourceAddressPrefix": "*",
+              "destinationAddressPrefix": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/virtualNetworks",
+      "apiVersion": "2023-11-01",
+      "name": "vnet-nordvik",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/networkSecurityGroups','nsg-nordvik-portal')]"
+      ],
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "10.81.0.0/16"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "snet-functions",
+            "properties": {
+              "addressPrefix": "10.81.1.0/24",
+              "delegations": [
+                {
+                  "name": "functions",
+                  "properties": {
+                    "serviceName": "Microsoft.App/environments"
+                  }
+                }
+              ],
+              "networkSecurityGroup": {
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups','nsg-nordvik-portal')]"
+              }
+            }
+          },
+          {
+            "name": "snet-private",
+            "properties": {
+              "addressPrefix": "10.81.2.0/24",
+              "privateEndpointNetworkPolicies": "Disabled"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/privateDnsZones",
+      "apiVersion": "2020-06-01",
+      "name": "privatelink.blob.core.windows.net",
+      "location": "global",
+      "tags": "[parameters('tags')]"
+    },
+    {
+      "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+      "apiVersion": "2020-06-01",
+      "name": "privatelink.blob.core.windows.net/link-nordvik",
+      "location": "global",
+      "tags": "[parameters('tags')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/privateDnsZones','privatelink.blob.core.windows.net')]",
+        "[resourceId('Microsoft.Network/virtualNetworks','vnet-nordvik')]"
+      ],
+      "properties": {
+        "registrationEnabled": false,
+        "virtualNetwork": {
+          "id": "[resourceId('Microsoft.Network/virtualNetworks','vnet-nordvik')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Network/privateEndpoints",
+      "apiVersion": "2023-11-01",
+      "name": "pe-nordvik-blob",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks','vnet-nordvik')]",
+        "[resourceId('Microsoft.Storage/storageAccounts',parameters('ticketStorageName'))]"
+      ],
+      "properties": {
+        "subnet": {
+          "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets','vnet-nordvik','snet-private')]"
+        },
+        "privateLinkServiceConnections": [
+          {
+            "name": "storage",
+            "properties": {
+              "privateLinkServiceId": "[resourceId('Microsoft.Storage/storageAccounts',parameters('ticketStorageName'))]",
+              "groupIds": [
+                "blob"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+      "apiVersion": "2023-11-01",
+      "name": "pe-nordvik-blob/default",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/privateEndpoints','pe-nordvik-blob')]",
+        "[resourceId('Microsoft.Network/privateDnsZones','privatelink.blob.core.windows.net')]"
+      ],
+      "properties": {
+        "privateDnsZoneConfigs": [
+          {
+            "name": "blob",
+            "properties": {
+              "privateDnsZoneId": "[resourceId('Microsoft.Network/privateDnsZones','privatelink.blob.core.windows.net')]"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/privateDnsZones",
+      "apiVersion": "2020-06-01",
+      "name": "privatelink.queue.core.windows.net",
+      "location": "global",
+      "tags": "[parameters('tags')]"
+    },
+    {
+      "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+      "apiVersion": "2020-06-01",
+      "name": "privatelink.queue.core.windows.net/link-nordvik",
+      "location": "global",
+      "tags": "[parameters('tags')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/privateDnsZones','privatelink.queue.core.windows.net')]",
+        "[resourceId('Microsoft.Network/virtualNetworks','vnet-nordvik')]"
+      ],
+      "properties": {
+        "registrationEnabled": false,
+        "virtualNetwork": {
+          "id": "[resourceId('Microsoft.Network/virtualNetworks','vnet-nordvik')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Network/privateEndpoints",
+      "apiVersion": "2023-11-01",
+      "name": "pe-nordvik-queue",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks','vnet-nordvik')]",
+        "[resourceId('Microsoft.Storage/storageAccounts',parameters('ticketStorageName'))]"
+      ],
+      "properties": {
+        "subnet": {
+          "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets','vnet-nordvik','snet-private')]"
+        },
+        "privateLinkServiceConnections": [
+          {
+            "name": "storage",
+            "properties": {
+              "privateLinkServiceId": "[resourceId('Microsoft.Storage/storageAccounts',parameters('ticketStorageName'))]",
+              "groupIds": [
+                "queue"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+      "apiVersion": "2023-11-01",
+      "name": "pe-nordvik-queue/default",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/privateEndpoints','pe-nordvik-queue')]",
+        "[resourceId('Microsoft.Network/privateDnsZones','privatelink.queue.core.windows.net')]"
+      ],
+      "properties": {
+        "privateDnsZoneConfigs": [
+          {
+            "name": "queue",
+            "properties": {
+              "privateDnsZoneId": "[resourceId('Microsoft.Network/privateDnsZones','privatelink.queue.core.windows.net')]"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/queueServices/queues",
+      "apiVersion": "2023-05-01",
+      "name": "[concat(parameters('ticketStorageName'),'/default/felanmalningar')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts',parameters('ticketStorageName'))]"
+      ],
+      "properties": {}
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "apiVersion": "2023-05-01",
+      "name": "[concat(parameters('ticketStorageName'),'/default/dokument')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts',parameters('ticketStorageName'))]"
+      ],
+      "properties": {
+        "publicAccess": "None"
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/managementPolicies",
+      "apiVersion": "2023-05-01",
+      "name": "[concat(parameters('ticketStorageName'),'/default')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts',parameters('ticketStorageName'))]"
+      ],
+      "properties": {
+        "policy": {
+          "rules": [
+            {
+              "name": "documents-cool-after-90-days",
+              "enabled": true,
+              "type": "Lifecycle",
+              "definition": {
+                "filters": {
+                  "blobTypes": [
+                    "blockBlob"
+                  ],
+                  "prefixMatch": [
+                    "dokument/"
+                  ]
+                },
+                "actions": {
+                  "baseBlob": {
+                    "tierToCool": {
+                      "daysAfterModificationGreaterThan": 90
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(resourceId('Microsoft.Storage/storageAccounts',parameters('hostStorageName')),parameters('functionName'),'queue-contributor')]",
+      "scope": "[resourceId('Microsoft.Storage/storageAccounts',parameters('hostStorageName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts',parameters('hostStorageName'))]",
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities',variables('identityName'))]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions','974c5e8b-45b9-4653-ba55-5f855dd0fb88')]",
+        "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities',variables('identityName')),'2023-01-31').principalId]",
+        "principalType": "ServicePrincipal"
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(resourceId('Microsoft.Storage/storageAccounts',parameters('ticketStorageName')),parameters('functionName'),'queue-contributor')]",
+      "scope": "[resourceId('Microsoft.Storage/storageAccounts',parameters('ticketStorageName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts',parameters('ticketStorageName'))]",
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities',variables('identityName'))]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions','974c5e8b-45b9-4653-ba55-5f855dd0fb88')]",
+        "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities',variables('identityName')),'2023-01-31').principalId]",
+        "principalType": "ServicePrincipal"
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites/config",
+      "apiVersion": "2024-04-01",
+      "name": "[concat(parameters('functionName'),'/authsettingsV2')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites',parameters('functionName'))]"
+      ],
+      "properties": {
+        "platform": {
+          "enabled": true,
+          "runtimeVersion": "~1"
+        },
+        "globalValidation": {
+          "requireAuthentication": true,
+          "unauthenticatedClientAction": "RedirectToLoginPage",
+          "redirectToProvider": "azureactivedirectory",
+          "excludedPaths": [
+            "/api/health"
+          ]
+        },
+        "identityProviders": {
+          "azureActiveDirectory": {
+            "enabled": true,
+            "registration": {
+              "clientId": "[parameters('authClientId')]",
+              "clientSecretSettingName": "NORDVIK_AUTH_SECRET",
+              "openIdIssuer": "[concat('https://login.microsoftonline.com/',parameters('tenantId'),'/v2.0')]"
+            },
+            "validation": {
+              "allowedAudiences": [
+                "[parameters('authClientId')]",
+                "[concat('api://',parameters('authClientId'))]"
+              ]
+            }
+          }
+        },
+        "login": {
+          "tokenStore": {
+            "enabled": false
+          }
+        },
+        "httpSettings": {
+          "requireHttps": true
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(resourceGroup().id,parameters('ticketStorageName'),'documents-contributor')]",
+      "scope": "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers',parameters('ticketStorageName'),'default','dokument')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers',parameters('ticketStorageName'),'default','dokument')]",
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities',variables('identityName'))]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions','ba92f5b4-2d11-453d-a403-e96b0029c9fe')]",
+        "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities',variables('identityName')),'2023-01-31').principalId]",
+        "principalType": "ServicePrincipal"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2022-10-01",
+      "name": "law-nordvik-portal",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "properties": {
+        "sku": {
+          "name": "PerGB2018"
+        },
+        "retentionInDays": 30,
+        "workspaceCapping": {
+          "dailyQuotaGb": 0.1
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/components",
+      "apiVersion": "2020-02-02",
+      "name": "appi-nordvik-portal",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "kind": "web",
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces','law-nordvik-portal')]"
+      ],
+      "properties": {
+        "Application_Type": "web",
+        "WorkspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces','law-nordvik-portal')]",
+        "DisableIpMasking": false
+      }
+    },
+    {
+      "type": "Microsoft.Insights/actionGroups",
+      "apiVersion": "2023-01-01",
+      "name": "ag-nordvik-portal",
+      "location": "global",
+      "tags": "[parameters('tags')]",
+      "properties": {
+        "groupShortName": "Nordvik8",
+        "enabled": true,
+        "emailReceivers": [
+          {
+            "name": "Labbansvarig",
+            "emailAddress": "[parameters('notificationEmail')]",
+            "useCommonAlertSchema": true
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Insights/metricAlerts",
+      "apiVersion": "2018-03-01",
+      "name": "alert-nordvik-errors",
+      "location": "global",
+      "tags": "[parameters('tags')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/components','appi-nordvik-portal')]",
+        "[resourceId('Microsoft.Insights/actionGroups','ag-nordvik-portal')]"
+      ],
+      "properties": {
+        "description": "Larm vid undantag i portalens kod",
+        "severity": 2,
+        "enabled": true,
+        "scopes": [
+          "[resourceId('Microsoft.Insights/components','appi-nordvik-portal')]"
+        ],
+        "evaluationFrequency": "PT1M",
+        "windowSize": "PT5M",
+        "autoMitigate": true,
+        "criteria": {
+          "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
+          "allOf": [
+            {
+              "name": "HttpErrors",
+              "metricName": "exceptions/count",
+              "metricNamespace": "Microsoft.Insights/components",
+              "operator": "GreaterThan",
+              "threshold": 0,
+              "timeAggregation": "Count",
+              "criterionType": "StaticThresholdCriterion"
+            }
+          ]
+        },
+        "actions": [
+          {
+            "actionGroupId": "[resourceId('Microsoft.Insights/actionGroups','ag-nordvik-portal')]"
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Consumption/budgets",
+      "apiVersion": "2023-11-01",
+      "name": "budget-nordvik-portal",
+      "properties": {
+        "category": "Cost",
+        "amount": 2500,
+        "timeGrain": "Monthly",
+        "timePeriod": {
+          "startDate": "[parameters('budgetStartDate')]"
+        },
+        "notifications": {
+          "Actual80": {
+            "enabled": true,
+            "operator": "GreaterThanOrEqualTo",
+            "threshold": 80,
+            "thresholdType": "Actual",
+            "contactEmails": [
+              "[parameters('notificationEmail')]"
+            ]
+          },
+          "Actual100": {
+            "enabled": true,
+            "operator": "GreaterThanOrEqualTo",
+            "threshold": 100,
+            "thresholdType": "Actual",
+            "contactEmails": [
+              "[parameters('notificationEmail')]"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "portalUrl": {
+      "type": "string",
+      "value": "[concat('https://',parameters('functionName'),'.azurewebsites.net/api/portal')]"
+    }
+  },
+  "variables": {
+    "vnet": "vnet-nordvik",
+    "nsg": "nsg-nordvik-portal",
+    "identityName": "id-nordvik-portal",
+    "planName": "asp-nordvik-portal"
+  }
+}
